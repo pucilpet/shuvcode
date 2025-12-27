@@ -96,7 +96,6 @@ export namespace ToolRegistry {
       ReadTool,
       GlobTool,
       GrepTool,
-      ListTool,
       EditTool,
       WriteTool,
       TaskTool,
@@ -105,10 +104,10 @@ export namespace ToolRegistry {
       TodoReadTool,
       WebSearchTool,
       CodeSearchTool,
-      AskQuestionTool,
       SkillTool,
       ...(Flag.OPENCODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
+      ...(config.experimental?.askquestion_tool === true ? [AskQuestionTool] : []),
       ...custom,
     ]
   }

@@ -27,6 +27,7 @@ import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
 
 import { PromptHistoryProvider } from "./component/prompt/history"
+import { PromptStashProvider } from "./component/prompt/stash"
 import { DialogAlert } from "./ui/dialog-alert"
 import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
@@ -98,7 +99,7 @@ async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   })
 }
 
-export function tui(input: { url: string; args: Args; onExit?: () => Promise<void> }) {
+export function tui(input: { url: string; directory?: string; args: Args; onExit?: () => Promise<void> }) {
   // promise to prevent immediate exit
   return new Promise<void>(async (resolve) => {
     const mode = await getTerminalBackgroundColor()
@@ -118,20 +119,22 @@ export function tui(input: { url: string; args: Args; onExit?: () => Promise<voi
                 <KVProvider>
                   <ToastProvider>
                     <RouteProvider>
-                      <SDKProvider url={input.url}>
+                      <SDKProvider url={input.url} directory={input.directory}>
                         <SyncProvider>
                           <ThemeProvider mode={mode}>
                             <LocalProvider>
                               <KeybindProvider>
-                                <DialogProvider>
-                                  <CommandProvider>
-                                    <PromptHistoryProvider>
-                                      <PromptRefProvider>
-                                        <App />
-                                      </PromptRefProvider>
-                                    </PromptHistoryProvider>
-                                  </CommandProvider>
-                                </DialogProvider>
+                                <PromptStashProvider>
+                                  <DialogProvider>
+                                    <CommandProvider>
+                                      <PromptHistoryProvider>
+                                        <PromptRefProvider>
+                                          <App />
+                                        </PromptRefProvider>
+                                      </PromptHistoryProvider>
+                                    </CommandProvider>
+                                  </DialogProvider>
+                                </PromptStashProvider>
                               </KeybindProvider>
                             </LocalProvider>
                           </ThemeProvider>
@@ -179,6 +182,20 @@ function App() {
   const exit = useExit()
   const promptRef = usePromptRef()
 
+  // Wire up console copy-to-clipboard via opentui's onCopySelection callback
+  renderer.console.onCopySelection = async (text: string) => {
+    if (!text || text.length === 0) return
+
+    const base64 = Buffer.from(text).toString("base64")
+    const osc52 = `\x1b]52;c;${base64}\x07`
+    const finalOsc52 = process.env["TMUX"] ? `\x1bPtmux;\x1b${osc52}\x1b\\` : osc52
+    // @ts-expect-error writeOut is not in type definitions
+    renderer.writeOut(finalOsc52)
+    await Clipboard.copy(text)
+      .then(() => toast.show({ message: "Copied to clipboard", variant: "info" }))
+      .catch(toast.error)
+    renderer.clearSelection()
+  }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
 
   createEffect(() => {
@@ -489,7 +506,7 @@ function App() {
     {
       title: "Toggle console",
       category: "System",
-      value: "app.fps",
+      value: "app.console",
       onSelect: (dialog) => {
         renderer.console.toggle()
         dialog.clear()
